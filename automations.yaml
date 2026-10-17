@@ -1,0 +1,258 @@
+# 家庭 MAC: D69512C45225
+# 统一 MQTT JSON 协议：
+#   cmdId / cmd / type(command|notify|status|update) / time / data
+# 所有 mqtt.publish 统一 qos: 2 保证消息顺序
+
+# --- 1: 设备查询 ---
+- alias: MQTT设备查询
+  mode: queued
+  trigger:
+    - platform: mqtt
+      topic: iot/server/D69512C45225/command
+  condition: "{{ trigger.payload_json.type == 'command' and trigger.payload_json.cmd in ['get_devices', 'get_device'] }}"
+  action:
+    - service: mqtt.publish
+      data:
+        topic: iot/device/D69512C45225/status
+        qos: 2
+        payload: |
+          {%- set default_exclude = ['automation','script','sun','weather','zone','person','todo','tts','update','event','conversation','input_number','input_select','input_button','input_text','input_datetime','scene','group','timer','counter','calendar','device_tracker','geo_location','image','image_processing','infrared','notify','radio_frequency','speech_to_text','tags','text','time','date','datetime','wake_word','button','number','select','siren','remote','valve'] -%}
+          {%- set default_exclude_ids = ['sensor.sun_','sensor.backup_','sensor.hacs_','sensor.time_','sensor.date_','binary_sensor.time_','sensor.proximity_','sensor.calendar_'] -%}
+          {%- set user_exclude = trigger.payload_json.data.excludeDomains | default([]) -%}
+          {%- set user_exclude_ids = trigger.payload_json.data.excludeIds | default([]) -%}
+          {%- set exclude = default_exclude + user_exclude -%}
+          {%- set exclude_ids = default_exclude_ids + user_exclude_ids -%}
+          {
+            "cmdId":"{{ trigger.payload_json.cmdId | default('') }}",
+            "cmd":"{{ trigger.payload_json.cmd | default('') }}",
+            "type":"notify",
+            "time":{{ now().timestamp() | int }},
+            "data":{
+              "domain":"{{ trigger.payload_json.data.domain | default('') }}",
+              "count":0,
+              "devices":[
+                {%- for s in states %}
+                  {%- set parts = s.entity_id.split('.') %}
+                  {%- set dom = parts[0] %}
+                  {%- set req_domain = trigger.payload_json.data.domain | default('') %}
+                  {%- set skip_id = namespace(v=false) -%}
+                  {%- for prefix in exclude_ids -%}
+                    {%- if s.entity_id.startswith(prefix) -%}{%- set skip_id.v = true -%}{%- endif -%}
+                  {%- endfor -%}
+                  {%- if dom not in exclude and not skip_id.v and (req_domain == '' or dom == req_domain) %}
+                    {"entity_id":"{{ s.entity_id }}","state":"{{ s.state | e }}","domain":"{{ dom }}","name":"{{ s.name | e }}"}
+                    {%- if not loop.last %},{% endif %}
+                  {%- endif %}
+                {%- endfor %}
+              ]
+            }
+          }
+
+# --- 2: 服务调用（有 entity_id）---
+- alias: MQTT服务调用_有实体
+  mode: queued
+  trigger:
+    - platform: mqtt
+      topic: iot/server/D69512C45225/command
+  condition: "{{ trigger.payload_json.type == 'command' and trigger.payload_json.cmd == 'service_call' and (trigger.payload_json.data.entity_id | default('')) != '' }}"
+  action:
+    - service: mqtt.publish
+      data:
+        topic: iot/device/D69512C45225/notify
+        qos: 2
+        payload: |
+          {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"service_call","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"executing"}}
+    - service: "{{ trigger.payload_json.data.service }}"
+      target:
+        entity_id: "{{ trigger.payload_json.data.entity_id }}"
+      data: "{{ trigger.payload_json.data.params | default({}) | to_json | from_json }}"
+    - service: mqtt.publish
+      data:
+        topic: iot/device/D69512C45225/notify
+        qos: 2
+        payload: |
+          {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"service_call","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"ok"}}
+
+# --- 3: 服务调用（无 entity_id）---
+- alias: MQTT服务调用_无实体
+  mode: queued
+  trigger:
+    - platform: mqtt
+      topic: iot/server/D69512C45225/command
+  condition: "{{ trigger.payload_json.type == 'command' and trigger.payload_json.cmd == 'service_call' and (trigger.payload_json.data.entity_id | default('')) == '' }}"
+  action:
+    - service: mqtt.publish
+      data:
+        topic: iot/device/D69512C45225/notify
+        qos: 2
+        payload: |
+          {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"service_call","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"executing"}}
+    - service: "{{ trigger.payload_json.data.service }}"
+      data: "{{ trigger.payload_json.data.params | default({}) | to_json | from_json }}"
+    - service: mqtt.publish
+      data:
+        topic: iot/device/D69512C45225/notify
+        qos: 2
+        payload: |
+          {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"service_call","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"ok"}}
+
+# --- 4: 查询场景列表 ---
+- alias: MQTT查询场景列表
+  mode: queued
+  trigger:
+    - platform: mqtt
+      topic: iot/server/D69512C45225/command
+  condition: "{{ trigger.payload_json.type == 'command' and trigger.payload_json.cmd == 'list_scenes' }}"
+  action:
+    - service: shell_command.scene_list
+      data:
+        cmd_id: "{{ trigger.payload_json.cmdId | default('') }}"
+
+# --- 5: 激活场景 ---
+- alias: MQTT激活场景
+  mode: queued
+  trigger:
+    - platform: mqtt
+      topic: iot/server/D69512C45225/command
+  condition: "{{ trigger.payload_json.type == 'command' and trigger.payload_json.cmd == 'activate_scene' }}"
+  action:
+    - choose:
+        - conditions: "{{ trigger.payload_json.data.entity_id in states.scene | map(attribute='entity_id') | list }}"
+          sequence:
+            - service: scene.turn_on
+              target:
+                entity_id: "{{ trigger.payload_json.data.entity_id }}"
+            - service: mqtt.publish
+              data:
+                topic: iot/device/D69512C45225/notify
+                qos: 2
+                payload: |
+                  {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"activate_scene","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"ok","scene":"{{ trigger.payload_json.data.entity_id }}"}}
+      default:
+        - service: mqtt.publish
+          data:
+            topic: iot/device/D69512C45225/notify
+            qos: 2
+            payload: |
+              {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"activate_scene","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"error","message":"场景不存在或已停用"}}
+
+# --- 6: 创建场景 ---
+- alias: MQTT创建场景
+  mode: queued
+  trigger:
+    - platform: mqtt
+      topic: iot/server/D69512C45225/command
+  condition: "{{ trigger.payload_json.type == 'command' and trigger.payload_json.cmd == 'create_scene' }}"
+  action:
+    - service: shell_command.scene_create
+      data:
+        scene_json_b64: "{{ trigger.payload_json.data | to_json | base64_encode }}"
+    - delay:
+        seconds: 1
+    - service: homeassistant.reload_core_config
+    - delay:
+        seconds: 1
+    - service: scene.reload
+    - service: mqtt.publish
+      data:
+        topic: iot/device/D69512C45225/notify
+        qos: 2
+        payload: |
+          {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"create_scene","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"ok"}}
+
+# --- 7: 编辑场景 ---
+- alias: MQTT编辑场景
+  mode: queued
+  trigger:
+    - platform: mqtt
+      topic: iot/server/D69512C45225/command
+  condition: "{{ trigger.payload_json.type == 'command' and trigger.payload_json.cmd == 'update_scene' }}"
+  action:
+    - service: shell_command.scene_update
+      data:
+        scene_id: "{{ trigger.payload_json.data.id }}"
+        scene_json_b64: "{{ trigger.payload_json.data | to_json | base64_encode }}"
+    - delay:
+        seconds: 1
+    - service: homeassistant.reload_core_config
+    - delay:
+        seconds: 1
+    - service: scene.reload
+    - service: mqtt.publish
+      data:
+        topic: iot/device/D69512C45225/notify
+        qos: 2
+        payload: |
+          {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"update_scene","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"ok"}}
+
+# --- 8: 删除场景 ---
+- alias: MQTT删除场景
+  mode: queued
+  trigger:
+    - platform: mqtt
+      topic: iot/server/D69512C45225/command
+  condition: "{{ trigger.payload_json.type == 'command' and trigger.payload_json.cmd == 'delete_scene' }}"
+  action:
+    - service: shell_command.scene_delete
+      data:
+        scene_id: "{{ trigger.payload_json.data.id }}"
+    - delay:
+        seconds: 1
+    - service: homeassistant.reload_core_config
+    - delay:
+        seconds: 1
+    - service: scene.reload
+    - service: mqtt.publish
+      data:
+        topic: iot/device/D69512C45225/notify
+        qos: 2
+        payload: |
+          {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"delete_scene","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"ok"}}
+
+# --- 9: 启用场景 ---
+- alias: MQTT启用场景
+  mode: queued
+  trigger:
+    - platform: mqtt
+      topic: iot/server/D69512C45225/command
+  condition: "{{ trigger.payload_json.type == 'command' and trigger.payload_json.cmd == 'enable_scene' }}"
+  action:
+    - service: shell_command.scene_enable
+      data:
+        scene_id: "{{ trigger.payload_json.data.id }}"
+    - delay:
+        seconds: 1
+    - service: homeassistant.reload_core_config
+    - delay:
+        seconds: 1
+    - service: scene.reload
+    - service: mqtt.publish
+      data:
+        topic: iot/device/D69512C45225/notify
+        qos: 2
+        payload: |
+          {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"enable_scene","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"ok"}}
+
+# --- 10: 停用场景 ---
+- alias: MQTT停用场景
+  mode: queued
+  trigger:
+    - platform: mqtt
+      topic: iot/server/D69512C45225/command
+  condition: "{{ trigger.payload_json.type == 'command' and trigger.payload_json.cmd == 'disable_scene' }}"
+  action:
+    - service: shell_command.scene_disable
+      data:
+        scene_id: "{{ trigger.payload_json.data.id }}"
+    - delay:
+        seconds: 1
+    - service: homeassistant.reload_core_config
+    - delay:
+        seconds: 1
+    - service: scene.reload
+    - service: mqtt.publish
+      data:
+        topic: iot/device/D69512C45225/notify
+        qos: 2
+        payload: |
+          {"cmdId":"{{ trigger.payload_json.cmdId | default('') }}","cmd":"disable_scene","type":"notify","time":{{ now().timestamp() | int }},"data":{"status":"ok"}}

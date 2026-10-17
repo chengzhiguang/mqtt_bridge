@@ -1,0 +1,12 @@
+{
+  "domain": "mqtt_bridge",
+  "name": "MQTT Bridge",
+  "version": "0.2.0",
+  "documentation": "https://github.com/chengzhiguang/huaweiqi/tree/main/haos/mqtt-bridge-standard",
+  "integration_type": "hub",
+  "config_flow": true,
+  "requirements": [],
+  "codeowners": [
+    "@chengzhiguang"
+  ]
+}

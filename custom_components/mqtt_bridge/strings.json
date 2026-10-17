@@ -1,0 +1,17 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up MQTT Bridge",
+        "description": "Create the initial MQTT Bridge entry.",
+        "data": {
+          "name": "Name",
+          "gateway_device_id": "Gateway device ID"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only a single MQTT Bridge entry is supported."
+    }
+  }
+}

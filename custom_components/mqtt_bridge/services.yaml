@@ -1,0 +1,334 @@
+get_devices:
+  name: 获取设备列表
+  description: 返回 Home Assistant 当前可见实体，并附带 device registry 补充信息。
+  fields:
+    domain:
+      name: 过滤域
+      description: 只返回某个 domain 下的实体，例如 light 或 switch。
+      example: light
+      selector:
+        text:
+    exclude_domains:
+      name: 排除域
+      description: 额外排除的 domain 列表。
+      example:
+        - sensor
+        - binary_sensor
+      selector:
+        object:
+    exclude_entity_prefixes:
+      name: 排除实体前缀
+      description: 额外排除的 entity_id 前缀列表。
+      example:
+        - sensor.time_
+      selector:
+        object:
+    include_attributes:
+      name: 包含属性
+      description: 是否把 state attributes 一起返回。
+      example: false
+      selector:
+        boolean:
+
+get_device:
+  name: 获取单个设备
+  description: 按 entity_id 或 device_id 查询单个实体，或查询整个 HA 设备及其关联实体。
+  fields:
+    entity_id:
+      name: 实体 ID
+      description: 直接按 entity_id 查询，例如 light.living_room。
+      example: light.living_room
+      selector:
+        entity:
+    device_id:
+      name: 设备 ID
+      description: 按 HA device registry 的 device_id 查询，并返回其关联实体。
+      selector:
+        text:
+    include_attributes:
+      name: 包含属性
+      description: 是否把 state attributes 一起返回。
+      example: false
+      selector:
+        boolean:
+
+call_service:
+  name: 调用 HA 服务
+  description: 执行一个标准 Home Assistant 服务调用，并返回桥接友好的结果。
+  fields:
+    service:
+      name: 服务
+      description: domain.service 形式，例如 light.turn_on。
+      example: light.turn_on
+      selector:
+        text:
+    domain:
+      name: 服务域
+      description: 如果不传 service，可单独传 domain。
+      example: light
+      selector:
+        text:
+    service_name:
+      name: 服务名
+      description: 如果不传 service，可单独传 service_name。
+      example: turn_on
+      selector:
+        text:
+    entity_id:
+      name: 实体 ID
+      description: 可选，目标实体。
+      example: light.living_room
+      selector:
+        entity:
+          multiple: true
+    target:
+      name: Target
+      description: 标准 target 结构。
+      selector:
+        object:
+    service_data:
+      name: 服务参数
+      description: 标准服务参数对象。
+      selector:
+        object:
+    params:
+      name: 兼容参数
+      description: 兼容旧桥接协议，等价于 service_data。
+      selector:
+        object:
+
+refresh_cloud_info:
+  name: 刷新云 MQTT 信息
+  description: 主动调用后台 token 接口，获取当前网关的云 MQTT 连接信息，并在 HA 日志中记录调用结果。
+  fields:
+    token_api_url:
+      name: Token 接口地址
+      description: Java 后台获取 MQTT 凭证的 HTTP 接口地址。
+      example: http://192.168.2.11:8082/api/device/mqtt/token
+      required: true
+      selector:
+        text:
+    gateway_device_id:
+      name: 网关设备 ID
+      description: 可选。不传时默认使用当前 MQTT Bridge 集成里配置的网关设备 ID。
+      example: D69512C45225
+      selector:
+        text:
+    client_type:
+      name: 客户端类型
+      description: 请求后台接口时使用的 clientType。
+      example: home_assistant
+      selector:
+        text:
+    timeout:
+      name: 超时时间
+      description: 调用后台接口的超时时间，单位秒。
+      example: 10
+      selector:
+        number:
+          min: 3
+          max: 60
+          mode: box
+    include_raw:
+      name: 包含原始结果
+      description: 是否在 service 响应里附带原始凭证对象，密码会自动打码。
+      example: false
+      selector:
+        boolean:
+
+handle_command:
+  name: 处理桥接命令
+  description: 接收一条旧版 MQTT Bridge 命令 JSON，并路由到对应的标准 service，再返回 notify 响应结构。
+  fields:
+    payload:
+      name: 命令负载
+      description: 完整命令对象，包含 cmdId、cmd、type、deviceId、gatewayDeviceId、data 等字段。
+      selector:
+        object:
+
+get_runtime_logs:
+  name: 查看运行日志
+  description: 读取 MQTT Bridge 外部 bridge.py 运行日志，便于排查从收到消息到处理完成的完整链路。
+  fields:
+    lines:
+      name: 返回行数
+      description: 读取最后多少行日志。
+      example: 200
+      selector:
+        number:
+          min: 20
+          max: 1000
+          mode: box
+    contains:
+      name: 关键词过滤
+      description: 可选，只返回包含该关键词的日志行，例如某个 cmdId。
+      example: 550e8400-e29b-41d4-a716-446655440000
+      selector:
+        text:
+
+reinitialize_runtime:
+  name: 完整重初始化
+  description: 重新执行 MQTT Bridge 的完整初始化链路，包括重载 HA 集成、重新获取公网 MQTT 信息、重建连接和刷新运行时缓存。
+  fields:
+    reason:
+      name: 原因
+      description: 可选，写入运行日志，便于排查是谁触发了重初始化。
+      example: 手动排障
+      selector:
+        text:
+    reload_entry:
+      name: 重载集成
+      description: 是否同时重载当前 MQTT Bridge 集成，重新执行插件自身初始化逻辑。
+      example: true
+      selector:
+        boolean:
+
+list_scenes:
+  name: 获取场景列表
+  description: 返回当前 Home Assistant 中可用的 scene 实体列表。
+
+activate_scene:
+  name: 激活场景
+  description: 按 entity_id 或 scene_id 激活一个场景。
+  fields:
+    entity_id:
+      name: 场景实体 ID
+      description: 例如 scene.movie_mode。
+      example: scene.movie_mode
+      selector:
+        entity:
+          domain: scene
+    scene_id:
+      name: 场景 ID
+      description: 不带 scene. 前缀的场景 ID，例如 movie_mode。
+      example: movie_mode
+      selector:
+        text:
+
+create_scene:
+  name: 创建场景
+  description: 创建一个由 MQTT Bridge 管理并持久化的场景。
+  fields:
+    id:
+      name: 场景 ID
+      description: 唯一场景 ID，例如 movie_mode。
+      example: movie_mode
+      selector:
+        text:
+    scene_id:
+      name: 兼容场景 ID
+      description: 兼容旧桥接协议，等价于 id。
+      example: movie_mode
+      selector:
+        text:
+    name:
+      name: 场景名称
+      description: 展示给用户看的场景名称。
+      example: 电影模式
+      selector:
+        text:
+    icon:
+      name: 图标
+      description: 可选图标，例如 mdi:movie。
+      example: mdi:movie
+      selector:
+        icon:
+    entities:
+      name: 实体快照
+      description: 需要应用到场景中的实体状态对象。
+      selector:
+        object:
+    enabled:
+      name: 立即启用
+      description: 是否创建后立即作为 scene 实体启用。
+      example: true
+      selector:
+        boolean:
+
+update_scene:
+  name: 更新场景
+  description: 更新一个由 MQTT Bridge 管理的已启用场景。
+  fields:
+    entity_id:
+      name: 场景实体 ID
+      description: 例如 scene.movie_mode。
+      example: scene.movie_mode
+      selector:
+        entity:
+          domain: scene
+    scene_id:
+      name: 场景 ID
+      description: 不带 scene. 前缀的场景 ID，例如 movie_mode。
+      example: movie_mode
+      selector:
+        text:
+    name:
+      name: 场景名称
+      description: 新的展示名称。
+      example: 客厅观影模式
+      selector:
+        text:
+    icon:
+      name: 图标
+      description: 新图标，例如 mdi:television-ambient-light。
+      example: mdi:television-ambient-light
+      selector:
+        icon:
+    entities:
+      name: 实体快照
+      description: 新的实体状态对象。
+      selector:
+        object:
+
+delete_scene:
+  name: 删除场景
+  description: 删除一个由 MQTT Bridge 管理的场景。
+  fields:
+    entity_id:
+      name: 场景实体 ID
+      description: 例如 scene.movie_mode。
+      example: scene.movie_mode
+      selector:
+        entity:
+          domain: scene
+    scene_id:
+      name: 场景 ID
+      description: 不带 scene. 前缀的场景 ID，例如 movie_mode。
+      example: movie_mode
+      selector:
+        text:
+
+enable_scene:
+  name: 启用场景
+  description: 启用一个已被 MQTT Bridge 停用的场景。
+  fields:
+    entity_id:
+      name: 场景实体 ID
+      description: 例如 scene.movie_mode。
+      example: scene.movie_mode
+      selector:
+        text:
+    scene_id:
+      name: 场景 ID
+      description: 不带 scene. 前缀的场景 ID，例如 movie_mode。
+      example: movie_mode
+      selector:
+        text:
+
+disable_scene:
+  name: 停用场景
+  description: 停用一个由 MQTT Bridge 管理的场景，但保留其定义。
+  fields:
+    entity_id:
+      name: 场景实体 ID
+      description: 例如 scene.movie_mode。
+      example: scene.movie_mode
+      selector:
+        entity:
+          domain: scene
+    scene_id:
+      name: 场景 ID
+      description: 不带 scene. 前缀的场景 ID，例如 movie_mode。
+      example: movie_mode
+      selector:
+        text:

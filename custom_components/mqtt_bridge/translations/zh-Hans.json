@@ -1,0 +1,17 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "配置 MQTT Bridge",
+        "description": "先创建一个 MQTT Bridge 集成实例，后续再逐步接入公网桥接守护。",
+        "data": {
+          "name": "名称",
+          "gateway_device_id": "网关设备 ID"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "当前只支持一个 MQTT Bridge 配置实例。"
+    }
+  }
+}
