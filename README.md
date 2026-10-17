@@ -171,3 +171,4 @@ cat /config/mqtt_bridge_runtime/runtime_status.json
 ## 当前状态
 
 这个目录已经是新的整理入口，后续的标准化工作都建议在这里继续做，不再直接改原始 `haos/mqtt-bridge`。
+# mqtt_bridge
