@@ -52,6 +52,100 @@ scp_copy() {
     "$@"
 }
 
+print_remote_status_summary() {
+  ssh_exec "python3 - '$REMOTE_RUN_DIR' <<'PY'
+import json
+import os
+import sys
+
+run_dir = sys.argv[1]
+status_path = os.path.join(run_dir, 'runtime_status.json')
+if not os.path.exists(status_path):
+    print('runtime_status.json: missing')
+    sys.exit(0)
+
+with open(status_path, encoding='utf-8') as f:
+    data = json.load(f)
+
+summary = {
+    'status': data.get('status'),
+    'aliyun_connected': data.get('aliyun_connected'),
+    'last_heartbeat_at': data.get('last_heartbeat_at'),
+    'last_ha_alive': data.get('last_ha_alive'),
+    'last_error': data.get('last_error'),
+    'last_exception': data.get('last_exception'),
+}
+print(json.dumps(summary, ensure_ascii=False))
+PY"
+}
+
+wait_for_remote_status() {
+  local phase="$1"
+  local start_ts="$2"
+  local timeout="$3"
+  ssh_exec "python3 - '$REMOTE_RUN_DIR' '$phase' '$start_ts' '$timeout' <<'PY'
+import json
+import os
+import sys
+import time
+
+run_dir = sys.argv[1]
+phase = sys.argv[2]
+start_ts = int(sys.argv[3])
+timeout = int(sys.argv[4])
+status_path = os.path.join(run_dir, 'runtime_status.json')
+deadline = time.time() + timeout
+last_data = None
+
+while time.time() < deadline:
+    if os.path.exists(status_path):
+        try:
+            with open(status_path, encoding='utf-8') as f:
+                last_data = json.load(f)
+        except Exception:
+            last_data = None
+    if last_data:
+        if phase == 'aliyun' and bool(last_data.get('aliyun_connected')):
+            print(json.dumps({
+                'phase': phase,
+                'status': last_data.get('status'),
+                'aliyun_connected': last_data.get('aliyun_connected'),
+                'last_heartbeat_at': last_data.get('last_heartbeat_at'),
+                'last_ha_alive': last_data.get('last_ha_alive'),
+            }, ensure_ascii=False))
+            sys.exit(0)
+        heartbeat_at = int(last_data.get('last_heartbeat_at') or 0)
+        if phase == 'heartbeat' and heartbeat_at >= start_ts:
+            print(json.dumps({
+                'phase': phase,
+                'status': last_data.get('status'),
+                'aliyun_connected': last_data.get('aliyun_connected'),
+                'last_heartbeat_at': heartbeat_at,
+                'last_ha_alive': last_data.get('last_ha_alive'),
+            }, ensure_ascii=False))
+            sys.exit(0)
+    time.sleep(2)
+
+print(json.dumps({
+    'phase': phase,
+    'status': (last_data or {}).get('status'),
+    'aliyun_connected': (last_data or {}).get('aliyun_connected'),
+    'last_heartbeat_at': (last_data or {}).get('last_heartbeat_at'),
+    'last_ha_alive': (last_data or {}).get('last_ha_alive'),
+    'last_error': (last_data or {}).get('last_error'),
+    'last_exception': (last_data or {}).get('last_exception'),
+}, ensure_ascii=False))
+sys.exit(1)
+PY"
+}
+
+print_remote_diagnostics() {
+  echo ">>> 最近运行状态"
+  print_remote_status_summary || true
+  echo ">>> 最近日志"
+  ssh_exec "tail -n 30 '$REMOTE_RUN_DIR/bridge.log' 2>/dev/null || true"
+}
+
 echo ">>> 连接 HAOS: $VM_HOST"
 ssh_exec "echo ok" >/dev/null
 
@@ -109,7 +203,28 @@ ENV_STATUS="$(
 
 if [ "$ENV_STATUS" = "ready" ]; then
   echo ">>> 启动 bridge 运行时"
+  INSTALL_STARTED_AT="$(ssh_exec "date +%s")"
   ssh_exec "sh '$REMOTE_RESTART_SCRIPT'"
+
+  echo ">>> 检查 bridge 进程"
+  ssh_exec "pgrep -f '$REMOTE_RUN_DIR/bridge.py' >/dev/null"
+
+  echo ">>> 等待阿里云 MQTT 连接"
+  if ! wait_for_remote_status "aliyun" "$INSTALL_STARTED_AT" 60; then
+    echo "安装后自动检查失败：阿里云 MQTT 未在预期时间内连上。"
+    print_remote_diagnostics
+    exit 1
+  fi
+
+  echo ">>> 等待首个心跳上报"
+  if ! wait_for_remote_status "heartbeat" "$INSTALL_STARTED_AT" 45; then
+    echo "安装后自动检查失败：首个心跳未在预期时间内出现。"
+    print_remote_diagnostics
+    exit 1
+  fi
+
+  echo ">>> 安装后自动检查摘要"
+  print_remote_status_summary
 else
   echo ">>> bridge.env 仍有必填项未填写，先跳过启动"
 fi

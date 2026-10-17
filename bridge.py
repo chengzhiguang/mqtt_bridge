@@ -32,7 +32,7 @@ import subprocess
 from hashlib import sha1
 from hmac import new as hmac_new
 from urllib.request import Request, urlopen
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import paho.mqtt.client as mqtt
 
@@ -222,6 +222,7 @@ runtime_status = {
     "last_response_topic": "",
     "last_response_status": "",
     "last_heartbeat_at": 0,
+    "last_ha_alive": False,
     "last_registry_load_at": 0,
     "registry_entities": 0,
     "registry_devices": 0,
@@ -1042,11 +1043,19 @@ def token_refresh_loop():
 
 def check_ha_alive():
     """HTTP 探测 HA 是否活着，避免访问需要认证的 /api/ 触发告警。"""
-    ha_host = os.environ.get("HA_HOST", "127.0.0.1")
-    ha_port = int(os.environ.get("HA_PORT", "8123"))
+    ha_base_url = os.environ.get("HA_BASE_URL", "").strip()
+    if ha_base_url:
+        parsed = urlparse(ha_base_url)
+        scheme = parsed.scheme or "http"
+        netloc = parsed.netloc or parsed.path
+        target_url = f"{scheme}://{netloc}/"
+    else:
+        ha_host = os.environ.get("HA_HOST", "127.0.0.1")
+        ha_port = int(os.environ.get("HA_PORT", "8123"))
+        target_url = f"http://{ha_host}:{ha_port}/"
     ha_alive = False
     try:
-        req = Request(f"http://{ha_host}:{ha_port}/", method="GET")
+        req = Request(target_url, method="GET")
         with urlopen(req, timeout=2) as resp:
             ha_alive = resp.status == 200
     except Exception as e:
@@ -1080,7 +1089,10 @@ def heartbeat_loop():
                 })
                 aliyun_client.publish(HEARTBEAT_TOPIC, payload, qos=0)
                 log.info("心跳已发送 ha_alive=%s", ha_alive)
-                update_runtime_status(last_heartbeat_at=int(time.time()))
+                update_runtime_status(
+                    last_heartbeat_at=int(time.time()),
+                    last_ha_alive=ha_alive,
+                )
             except Exception as e:
                 log.warning("心跳发送失败: %s", e)
                 update_runtime_status(

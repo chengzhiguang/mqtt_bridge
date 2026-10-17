@@ -26,6 +26,12 @@ VM_HOST=192.168.64.16 VM_PASS='你的密码' bash install.sh
 - `/config/mqtt_bridge_runtime/bridge.env`
 - `/config/mqtt_bridge_runtime/ha_restart_bridge.sh`
 
+如果 `bridge.env` 里的必填项已经填好，`install.sh` 会继续自动做 3 个检查：
+
+- bridge 进程是否已启动
+- 阿里云 MQTT 是否已连接
+- 首个心跳是否已经上报，并显示 `last_ha_alive`
+
 ## 三、HA 页面初始化
 
 进入：
@@ -82,6 +88,7 @@ sh /config/mqtt_bridge_runtime/ha_restart_bridge.sh
 - `阿里云 MQTT 连接成功`
 - `阿里云已订阅`
 - `心跳已发送`
+- `心跳已发送 ha_alive=True`
 
 ## 六、页面验收
 

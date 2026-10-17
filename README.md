@@ -55,6 +55,9 @@ VM_HOST=192.168.64.16 VM_PASS='你的密码' bash install.sh
 5. 下发 `bridge.env.example`
 6. 重启 HA Core
 7. 如果 `bridge.env` 已填完，就自动启动 bridge
+8. 自动检查 bridge 进程是否已启动
+9. 自动检查阿里云 MQTT 是否已连接
+10. 自动等待首个心跳，并输出 `last_ha_alive`
 
 ## 安装界面
 
@@ -126,10 +129,15 @@ HA 页面里验证：
 
 ```bash
 ssh root@<HAOS_IP>
-sh /config/mqtt_bridge_runtime/ha_restart_bridge.sh
 tail -f /config/mqtt_bridge_runtime/bridge.log
 cat /config/mqtt_bridge_runtime/runtime_status.json
 ```
+
+如果使用 `install.sh` 且 `bridge.env` 已经填好，安装脚本本身就会直接给出这三项结果：
+
+- bridge 进程是否启动成功
+- 阿里云 MQTT 是否已连接
+- 首个心跳是否已上报，以及 `last_ha_alive` 当前值
 
 ## 日常运维
 

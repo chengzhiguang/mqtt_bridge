@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- 修复心跳中的 HA 存活探测，优先基于 `HA_BASE_URL` 检查，避免误报 `ha_alive=false`
+- 运行状态新增 `last_ha_alive`，便于安装后直接确认 HA 健康状态
+- `install.sh` 新增安装后自动检查：bridge 进程、阿里云 MQTT 连接、首个心跳
+
 ## 0.2.0
 
 - 新建 `mqtt-bridge-standard` 目录，和原 `mqtt-bridge` 并行维护
