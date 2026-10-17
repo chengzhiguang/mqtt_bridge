@@ -49,7 +49,10 @@ MQTT Bridge
 建议填写：
 
 - 名称：`MQTT Bridge`
-- 网关设备 ID：例如 `D69512C45225`
+- 设备 ID：例如 `D69512C45225`
+- 后台基础地址：例如 `http://192.168.64.1:8082`
+- HA 基础地址：例如 `http://192.168.64.16`
+- HA 长期访问令牌：在 HA 个人资料页最下方生成
 
 ## 四、bridge.env 必填项
 
@@ -64,8 +67,7 @@ vi /config/mqtt_bridge_runtime/bridge.env
 - `MQTT_TOKEN_API`
 - `COMMAND_DISPATCH_MODE=ha_service`
 - `HA_BASE_URL`
-- `HA_REFRESH_TOKEN`
-- `HA_CLIENT_ID`
+- `HA_ACCESS_TOKEN`
 - `HA_TOKEN_URL`
 - `HA_COMMAND_SERVICE=mqtt_bridge.handle_command`
 
@@ -94,6 +96,7 @@ sh /config/mqtt_bridge_runtime/ha_restart_bridge.sh
 
 进入 `MQTT Bridge` 设备页，确认能看到：
 
+- `初始化运行时`
 - `完整重初始化`
 - `刷新云 MQTT 信息`
 - `运行状态`
@@ -107,6 +110,8 @@ sh /config/mqtt_bridge_runtime/ha_restart_bridge.sh
 - `运行状态 = connected`
 - `公网 MQTT 信息` 能看到 `endpoint / username / topic`
 - `本地 MQTT 信息` 在 `ha_service` 模式下显示“当前未启用”是正常的
+
+如果是通过 HACS 安装的集成，建议先点一次 `初始化运行时`，让集成自动生成 `/config/mqtt_bridge_runtime` 下的运行时文件，再继续启动或重初始化。
 
 ## 七、联调检查
 

@@ -3,11 +3,17 @@
 DOMAIN = "mqtt_bridge"
 PLATFORMS: list[str] = ["scene", "button", "sensor"]
 
+CONF_BACKEND_BASE_URL = "backend_base_url"
+CONF_DEVICE_ID = "device_id"
 CONF_GATEWAY_DEVICE_ID = "gateway_device_id"
+CONF_HA_ACCESS_TOKEN = "ha_access_token"
+CONF_HA_BASE_URL = "ha_base_url"
+CONF_MQTT_TOKEN_API = "mqtt_token_api"
 CONF_NAME = "name"
 
 SERVICE_GET_DEVICES = "get_devices"
 SERVICE_GET_DEVICE = "get_device"
+SERVICE_INITIALIZE_RUNTIME = "initialize_runtime"
 SERVICE_CALL_SERVICE = "call_service"
 SERVICE_REFRESH_CLOUD_INFO = "refresh_cloud_info"
 SERVICE_HANDLE_COMMAND = "handle_command"

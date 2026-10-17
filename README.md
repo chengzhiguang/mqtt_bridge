@@ -70,6 +70,7 @@ VM_HOST=192.168.64.16 VM_PASS='你的密码' bash install.sh
 建议截图内容：
 
 - `MQTT Bridge` 设备页
+- `初始化运行时`
 - `完整重初始化`
 - `刷新云 MQTT 信息`
 - `运行状态`
@@ -83,17 +84,17 @@ VM_HOST=192.168.64.16 VM_PASS='你的密码' bash install.sh
 
 ## HACS 自定义仓库
 
-如果你想把它作为 HACS 自定义仓库接入，使用当前仓库地址，并指定这个目录作为内容根：
+如果你想把它作为 HACS 自定义仓库接入，使用当前仓库地址：
 
-- 仓库：`https://github.com/chengzhiguang/huaweiqi`
-- 目录：`haos/mqtt-bridge-standard`
+- 仓库：`https://github.com/chengzhiguang/mqtt_bridge.git`
+- 类型：`Integration`
 
 当前目录已经带了：
 
 - `hacs.json`
 - `custom_components/mqtt_bridge/manifest.json`
 - 可直接渲染的 `README.md`
-- 明确版本号 `0.2.0`
+- 明确版本号 `0.3.0`
 - `CHANGELOG.md`
 - `RELEASE_NOTES.md`
 
@@ -107,7 +108,12 @@ VM_HOST=192.168.64.16 VM_PASS='你的密码' bash install.sh
 你主要只需要关注两件事：
 
 1. HA 页面里添加 `MQTT Bridge` 集成
-2. 填好 `/config/mqtt_bridge_runtime/bridge.env`
+2. 在配置表单里填好这 4 个核心字段：
+   - `设备 ID`
+   - `后台基础地址`
+   - `HA 基础地址`
+   - `HA 长期访问令牌`
+3. 再补齐 `/config/mqtt_bridge_runtime/bridge.env`
 
 ## 安装后验证
 
@@ -117,6 +123,7 @@ HA 页面里验证：
 2. 搜索 `MQTT Bridge`
 3. 添加后进入设备页
 4. 你应该能看到：
+   - `初始化运行时`
    - `完整重初始化`
    - `刷新云 MQTT 信息`
    - `运行状态`
@@ -138,6 +145,8 @@ cat /config/mqtt_bridge_runtime/runtime_status.json
 - bridge 进程是否启动成功
 - 阿里云 MQTT 是否已连接
 - 首个心跳是否已上报，以及 `last_ha_alive` 当前值
+
+如果使用 HACS 安装集成，建议先进入设备页点击一次 `初始化运行时`，让集成把 `bridge.py`、`bridge.env` 和重启脚本写到 `/config/mqtt_bridge_runtime`。
 
 ## 日常运维
 

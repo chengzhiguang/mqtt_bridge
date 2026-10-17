@@ -23,7 +23,9 @@ from homeassistant.helpers import (
 )
 
 from .const import (
+    CONF_BACKEND_BASE_URL,
     CONF_GATEWAY_DEVICE_ID,
+    CONF_MQTT_TOKEN_API,
     DEFAULT_EXCLUDE_DOMAINS,
     DEFAULT_EXCLUDE_ENTITY_PREFIXES,
     DOMAIN,
@@ -36,6 +38,7 @@ from .const import (
     SERVICE_GET_DEVICE,
     SERVICE_GET_DEVICES,
     SERVICE_HANDLE_COMMAND,
+    SERVICE_INITIALIZE_RUNTIME,
     SERVICE_GET_RUNTIME_LOGS,
     SERVICE_LIST_SCENES,
     SERVICE_REINITIALIZE_RUNTIME,
@@ -43,7 +46,11 @@ from .const import (
     SERVICE_UPDATE_SCENE,
     PLATFORMS,
 )
-from .runtime import RUNTIME_CONTROL_DIR, RUNTIME_LOG_PATH
+from .runtime import (
+    RUNTIME_CONTROL_DIR,
+    RUNTIME_LOG_PATH,
+    initialize_runtime_environment,
+)
 from .scene import MqttBridgeSceneManager, get_scene_manager
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,7 +81,7 @@ CALL_SERVICE_SCHEMA = vol.Schema(
 
 REFRESH_CLOUD_INFO_SCHEMA = vol.Schema(
     {
-        vol.Required("token_api_url"): cv.string,
+        vol.Optional("token_api_url"): cv.string,
         vol.Optional("gateway_device_id"): cv.string,
         vol.Optional("client_type", default="home_assistant"): cv.string,
         vol.Optional("timeout", default=10): vol.All(
@@ -89,6 +96,12 @@ HANDLE_COMMAND_SCHEMA = vol.Schema(
         vol.Optional("payload"): dict,
     },
     extra=vol.ALLOW_EXTRA,
+)
+
+INITIALIZE_RUNTIME_SCHEMA = vol.Schema(
+    {
+        vol.Optional("start_immediately", default=True): cv.boolean,
+    }
 )
 
 GET_RUNTIME_LOGS_SCHEMA = vol.Schema(
@@ -181,8 +194,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: BridgeConfigEntry) -> bo
     hass.data.setdefault(DOMAIN, {})
     scene_manager = MqttBridgeSceneManager(hass, entry.entry_id)
     await scene_manager.async_load()
+    entry_config = dict(entry.data)
+    entry_config.update(entry.options)
     hass.data[DOMAIN][entry.entry_id] = {
-        "config": dict(entry.data),
+        "config": entry_config,
         "scene_manager": scene_manager,
     }
 
@@ -246,6 +261,15 @@ def _async_register_services(hass: HomeAssistant) -> None:
             SERVICE_GET_RUNTIME_LOGS,
             _async_handle_get_runtime_logs,
             schema=GET_RUNTIME_LOGS_SCHEMA,
+            supports_response=SupportsResponse.ONLY,
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_INITIALIZE_RUNTIME):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_INITIALIZE_RUNTIME,
+            _async_handle_initialize_runtime,
+            schema=INITIALIZE_RUNTIME_SCHEMA,
             supports_response=SupportsResponse.ONLY,
         )
 
@@ -564,7 +588,9 @@ def _coerce_target_ids(value: Any) -> list[str]:
 
 async def _async_handle_refresh_cloud_info(call: ServiceCall) -> ServiceResponse:
     """Fetch cloud MQTT credential info from the backend API."""
-    token_api_url = str(call.data.get("token_api_url") or "").strip()
+    token_api_url = str(
+        call.data.get("token_api_url") or _get_runtime_token_api_url(call.hass)
+    ).strip()
     gateway_device_id = str(
         call.data.get("gateway_device_id") or _get_gateway_device_id(call.hass)
     ).strip()
@@ -664,8 +690,45 @@ async def _async_handle_get_runtime_logs(call: ServiceCall) -> ServiceResponse:
     }
 
 
+async def _async_handle_initialize_runtime(call: ServiceCall) -> ServiceResponse:
+    """Create runtime files under /config and optionally start bridge.py."""
+    config = _get_active_entry_config(call.hass)
+    start_immediately = bool(call.data.get("start_immediately", True))
+    result = await asyncio.to_thread(
+        initialize_runtime_environment,
+        config,
+        start_immediately=start_immediately,
+    )
+    missing_fields = result.get("missing_fields", [])
+    start_result = result.get("start_result", {})
+    returncode = start_result.get("returncode") if isinstance(start_result, dict) else None
+
+    status = "ok"
+    message = "运行时文件已初始化"
+    if missing_fields:
+        status = "needs_input"
+        message = "运行时文件已初始化，但仍缺少启动所需配置"
+    elif start_immediately and returncode not in (None, 0):
+        status = "error"
+        message = "运行时文件已初始化，但启动失败"
+    elif start_immediately:
+        message = "运行时文件已初始化并已尝试启动"
+
+    return {
+        "status": status,
+        "gateway_device_id": _get_gateway_device_id(call.hass),
+        "runtime_dir": result.get("runtime_dir", ""),
+        "bridge_path": result.get("bridge_path", ""),
+        "env_path": result.get("env_path", ""),
+        "restart_script_path": result.get("restart_script_path", ""),
+        "missing_fields": missing_fields,
+        "start_requested": start_immediately,
+        "start_result": start_result,
+        "message": message,
+    }
+
+
 async def _async_handle_reinitialize_runtime(call: ServiceCall) -> ServiceResponse:
-    """Re-run both bridge runtime and HA integration initialization."""
     reason = str(call.data.get("reason") or "manual").strip() or "manual"
     reload_entry = bool(call.data.get("reload_entry", True))
     command_path = await asyncio.to_thread(_queue_runtime_command, "full_reinitialize", reason)
@@ -1077,10 +1140,46 @@ def _get_scene_manager_for_call(hass: HomeAssistant) -> MqttBridgeSceneManager:
     raise ServiceValidationError("MQTT Bridge 尚未初始化")
 
 
+def _get_active_entry_config(hass: HomeAssistant) -> dict[str, Any]:
+    """Return the merged config/options for the active config entry."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        data = dict(entry.data)
+        data.update(entry.options)
+        return data
+    raise ServiceValidationError("MQTT Bridge 尚未初始化")
+
+
 def _get_gateway_device_id(hass: HomeAssistant) -> str:
     """Return the configured gateway device id, if any."""
     for entry in hass.config_entries.async_entries(DOMAIN):
-        gateway_device_id = entry.data.get(CONF_GATEWAY_DEVICE_ID, "").strip()
+        gateway_device_id = str(
+            entry.options.get(
+                CONF_GATEWAY_DEVICE_ID,
+                entry.data.get(CONF_GATEWAY_DEVICE_ID, ""),
+            )
+        ).strip()
         if gateway_device_id:
             return gateway_device_id
+    return ""
+
+
+def _get_runtime_token_api_url(hass: HomeAssistant) -> str:
+    """Return the configured token API URL, if any."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        token_api_url = str(
+            entry.options.get(
+                CONF_MQTT_TOKEN_API,
+                entry.data.get(CONF_MQTT_TOKEN_API, ""),
+            )
+        ).strip()
+        if token_api_url:
+            return token_api_url
+        backend_base_url = str(
+            entry.options.get(
+                CONF_BACKEND_BASE_URL,
+                entry.data.get(CONF_BACKEND_BASE_URL, ""),
+            )
+        ).strip().rstrip("/")
+        if backend_base_url:
+            return f"{backend_base_url}/api/device/mqtt/token"
     return ""

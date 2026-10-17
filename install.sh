@@ -187,9 +187,10 @@ echo ">>> 检查 bridge.env 是否已完成初始化"
 ENV_STATUS="$(
   ssh_exec "
     set -eu
-    if grep -q '^HA_REFRESH_TOKEN=$' '$REMOTE_ENV_FILE'; then
-      echo missing
-    elif grep -q '^HA_CLIENT_ID=$' '$REMOTE_ENV_FILE'; then
+    ha_access_token=\"\$(grep '^HA_ACCESS_TOKEN=' '$REMOTE_ENV_FILE' | head -n1 | cut -d= -f2-)\"
+    ha_refresh_token=\"\$(grep '^HA_REFRESH_TOKEN=' '$REMOTE_ENV_FILE' | head -n1 | cut -d= -f2-)\"
+    ha_client_id=\"\$(grep '^HA_CLIENT_ID=' '$REMOTE_ENV_FILE' | head -n1 | cut -d= -f2-)\"
+    if [ -z \"\$ha_access_token\" ] && { [ -z \"\$ha_refresh_token\" ] || [ -z \"\$ha_client_id\" ]; }; then
       echo missing
     elif grep -q '^HA_BASE_URL=$' '$REMOTE_ENV_FILE'; then
       echo missing
@@ -255,6 +256,8 @@ bridge.py 尚未启动，因为 bridge.env 还没填完。
 3. 至少补齐这些字段：
    - MQTT_TOKEN_API
    - HA_BASE_URL
+   - HA_ACCESS_TOKEN
+     或者
    - HA_REFRESH_TOKEN
    - HA_CLIENT_ID
 4. 启动 bridge

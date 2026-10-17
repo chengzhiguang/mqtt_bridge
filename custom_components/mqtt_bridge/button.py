@@ -10,7 +10,20 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_GATEWAY_DEVICE_ID, DOMAIN, SERVICE_REINITIALIZE_RUNTIME, SERVICE_REFRESH_CLOUD_INFO
+from .const import (
+    CONF_GATEWAY_DEVICE_ID,
+    CONF_MQTT_TOKEN_API,
+    DOMAIN,
+    SERVICE_INITIALIZE_RUNTIME,
+    SERVICE_REINITIALIZE_RUNTIME,
+    SERVICE_REFRESH_CLOUD_INFO,
+)
+
+
+def _entry_value(entry: ConfigEntry, key: str, default: str = "") -> str:
+    """Read a config value from options first, then entry data."""
+    value = entry.options.get(key, entry.data.get(key, default))
+    return str(value or "").strip()
 
 
 async def async_setup_entry(
@@ -21,6 +34,15 @@ async def async_setup_entry(
     """Set up MQTT Bridge button entities."""
     async_add_entities(
         [
+            MqttBridgeActionButton(
+                hass,
+                entry,
+                key="initialize_runtime",
+                name="初始化运行时",
+                icon="mdi:play-box-edit-outline",
+                service=SERVICE_INITIALIZE_RUNTIME,
+                service_data={"start_immediately": True},
+            ),
             MqttBridgeActionButton(
                 hass,
                 entry,
@@ -64,7 +86,7 @@ class MqttBridgeActionButton(ButtonEntity):
         self._entry = entry
         self._service = service
         self._service_data = dict(service_data)
-        gateway_device_id = str(entry.data.get(CONF_GATEWAY_DEVICE_ID) or "").strip()
+        gateway_device_id = _entry_value(entry, CONF_GATEWAY_DEVICE_ID)
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_name = name
         self._attr_icon = icon
@@ -82,11 +104,9 @@ class MqttBridgeActionButton(ButtonEntity):
         if self._service == SERVICE_REFRESH_CLOUD_INFO:
             data.setdefault(
                 "token_api_url",
-                "http://192.168.64.1:8082/api/device/mqtt/token",
+                _entry_value(self._entry, CONF_MQTT_TOKEN_API),
             )
-            gateway_device_id = str(
-                self._entry.data.get(CONF_GATEWAY_DEVICE_ID) or ""
-            ).strip()
+            gateway_device_id = _entry_value(self._entry, CONF_GATEWAY_DEVICE_ID)
             if gateway_device_id:
                 data.setdefault("gateway_device_id", gateway_device_id)
         await self.hass.services.async_call(

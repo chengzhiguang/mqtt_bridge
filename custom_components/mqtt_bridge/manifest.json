@@ -1,11 +1,13 @@
 {
   "domain": "mqtt_bridge",
   "name": "MQTT Bridge",
-  "version": "0.2.0",
-  "documentation": "https://github.com/chengzhiguang/huaweiqi/tree/main/haos/mqtt-bridge-standard",
+  "version": "0.3.0",
+  "documentation": "https://github.com/chengzhiguang/mqtt_bridge",
   "integration_type": "hub",
   "config_flow": true,
-  "requirements": [],
+  "requirements": [
+    "paho-mqtt>=1.6.1,<3.0"
+  ],
   "codeowners": [
     "@chengzhiguang"
   ]

@@ -78,7 +78,12 @@ class MqttBridgeBaseEntity(CoordinatorEntity[MqttBridgeRuntimeCoordinator], Sens
         icon: str,
     ) -> None:
         super().__init__(coordinator)
-        gateway_device_id = str(entry.data.get(CONF_GATEWAY_DEVICE_ID) or "").strip()
+        gateway_device_id = str(
+            entry.options.get(
+                CONF_GATEWAY_DEVICE_ID,
+                entry.data.get(CONF_GATEWAY_DEVICE_ID, ""),
+            )
+        ).strip()
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_name = name

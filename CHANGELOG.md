@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- 配置流改为精简安装表单，只保留设备 ID、后台基础地址、HA 基础地址和 HA 长期访问令牌
+- 新增选项页，可在安装后直接从 HA 页面修改上述配置
+- “刷新云 MQTT 信息”按钮改为优先使用集成里保存的 `token_api_url`
+- `bridge.env.example` 与初始化文档改为优先使用 `HA_ACCESS_TOKEN`
+- 把 `bridge.py` 等运行时资产打包进集成目录，并新增 `初始化运行时` 按钮/service
+
 ## 0.2.1
 
 - 修复心跳中的 HA 存活探测，优先基于 `HA_BASE_URL` 检查，避免误报 `ha_alive=false`

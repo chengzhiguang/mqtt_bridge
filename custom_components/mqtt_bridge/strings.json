@@ -3,15 +3,33 @@
     "step": {
       "user": {
         "title": "Set up MQTT Bridge",
-        "description": "Create the initial MQTT Bridge entry.",
+        "description": "Create the initial MQTT Bridge entry with a simplified install form.",
         "data": {
           "name": "Name",
-          "gateway_device_id": "Gateway device ID"
+          "device_id": "Device ID",
+          "backend_base_url": "Backend base URL",
+          "ha_base_url": "Home Assistant base URL",
+          "ha_access_token": "Home Assistant access token"
         }
       }
     },
     "abort": {
       "single_instance_allowed": "Only a single MQTT Bridge entry is supported."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit MQTT Bridge",
+        "description": "Update the device, backend, Home Assistant URL, and access token used by the bridge runtime.",
+        "data": {
+          "name": "Name",
+          "device_id": "Device ID",
+          "backend_base_url": "Backend base URL",
+          "ha_base_url": "Home Assistant base URL",
+          "ha_access_token": "Home Assistant access token"
+        }
+      }
     }
   }
 }

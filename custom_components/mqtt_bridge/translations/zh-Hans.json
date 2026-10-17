@@ -3,15 +3,33 @@
     "step": {
       "user": {
         "title": "配置 MQTT Bridge",
-        "description": "先创建一个 MQTT Bridge 集成实例，后续再逐步接入公网桥接守护。",
+        "description": "先用精简表单创建 MQTT Bridge 集成实例，只需要设备 ID、后台地址、HA 地址和访问令牌。",
         "data": {
           "name": "名称",
-          "gateway_device_id": "网关设备 ID"
+          "device_id": "设备 ID",
+          "backend_base_url": "后台基础地址",
+          "ha_base_url": "HA 基础地址",
+          "ha_access_token": "HA 长期访问令牌"
         }
       }
     },
     "abort": {
       "single_instance_allowed": "当前只支持一个 MQTT Bridge 配置实例。"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "编辑 MQTT Bridge",
+        "description": "修改设备 ID、后台地址、HA 地址和访问令牌，供运行时桥接直接使用。",
+        "data": {
+          "name": "名称",
+          "device_id": "设备 ID",
+          "backend_base_url": "后台基础地址",
+          "ha_base_url": "HA 基础地址",
+          "ha_access_token": "HA 长期访问令牌"
+        }
+      }
     }
   }
 }

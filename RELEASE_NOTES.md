@@ -1,5 +1,20 @@
 # MQTT Bridge Standard Release Notes
 
+## v0.3.0
+
+这次版本重点优化了安装体验。
+
+核心变化：
+- HA 配置流改为 4 个核心字段：
+  - 设备 ID
+  - 后台基础地址
+  - HA 基础地址
+  - HA 长期访问令牌
+- 自动派生 `gateway_device_id` 和 `MQTT_TOKEN_API`
+- 新增选项页，安装后可以直接在 HA 页面修改配置
+- 运行时模板和文档改为优先使用 `HA_ACCESS_TOKEN`
+- 新增 `初始化运行时` 按钮，可把 bridge 运行时文件直接写入 `/config/mqtt_bridge_runtime`
+
 ## v0.2.0
 
 这是标准化目录的第一个可用版本。
