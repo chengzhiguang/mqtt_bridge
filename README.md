@@ -56,6 +56,28 @@ VM_HOST=192.168.64.16 VM_PASS='你的密码' bash install.sh
 6. 重启 HA Core
 7. 如果 `bridge.env` 已填完，就自动启动 bridge
 
+## 安装界面
+
+推荐在开源仓库里优先放一张设备页截图，便于别人第一眼理解装好后的结果。
+
+截图建议位置：
+
+- `docs/assets/install-device-page.png`
+
+建议截图内容：
+
+- `MQTT Bridge` 设备页
+- `完整重初始化`
+- `刷新云 MQTT 信息`
+- `运行状态`
+- `最近日志`
+- `公网 MQTT 信息`
+- `本地 MQTT 信息`
+
+截图资源说明见：
+
+[docs/assets/README.md](file:///Users/chengzhiguang/workspace/huaweiqi/haos/mqtt-bridge-standard/docs/assets/README.md)
+
 ## HACS 自定义仓库
 
 如果你想把它作为 HACS 自定义仓库接入，使用当前仓库地址，并指定这个目录作为内容根：
@@ -77,6 +99,7 @@ VM_HOST=192.168.64.16 VM_PASS='你的密码' bash install.sh
 详细步骤看：
 
 [custom_integration_quickstart.md](file:///Users/chengzhiguang/workspace/huaweiqi/haos/mqtt-bridge-standard/custom_integration_quickstart.md)
+[INIT_CHECKLIST.md](file:///Users/chengzhiguang/workspace/huaweiqi/haos/mqtt-bridge-standard/INIT_CHECKLIST.md)
 
 你主要只需要关注两件事：
 
