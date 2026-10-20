@@ -141,7 +141,7 @@ handle_command:
   fields:
     payload:
       name: 命令负载
-      description: 完整命令对象，包含 traceId、cmd、type、deviceId、gatewayDeviceId、data 等字段。
+      description: 完整命令对象，包含 traceId、cmd、type、deviceId、gatewayId、data 等字段。
       selector:
         object:
 

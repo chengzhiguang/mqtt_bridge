@@ -186,7 +186,7 @@ runtime_reinit_lock = threading.Lock()
 runtime_status_lock = threading.Lock()
 runtime_status = {
     "status": "starting",
-    "gateway_device_id": HOME_MAC,
+    "gatewayId": HOME_MAC,
     "dispatch_mode": COMMAND_DISPATCH_MODE,
     "token_api_url": HTTP_API_URL,
     "ha_command_service": HA_COMMAND_SERVICE,
@@ -393,13 +393,13 @@ def on_aliyun_connect(client, userdata, flags, rc):
         )
 
 def ensure_device_ids(obj, default_device_id=None):
-    """确保 payload 里有 gatewayDeviceId + deviceId 两个顶层字段
-    - gatewayDeviceId 永远强制 = HOME_MAC（bridge 自己知道网关标识，外部传了也覆盖）
+    """确保 payload 里有 gatewayId + deviceId 两个顶层字段
+    - gatewayId 永远强制 = HOME_MAC（bridge 自己知道网关标识，外部传了也覆盖）
     - deviceId：从 data 里取目标设备；网关级指令取不到则 fallback 到 HOME_MAC（两值相等）
     """
     if not isinstance(obj, dict):
         return obj
-    obj["gatewayDeviceId"] = HOME_MAC   # 强制覆盖，防止外部瞎传
+    obj["gatewayId"] = HOME_MAC   # 强制覆盖，防止外部瞎传
     if not obj.get("deviceId"):
         dev_id = None
         data = obj.get("data")
@@ -508,7 +508,7 @@ def on_local_message(client, userdata, msg):
                 log.info("  dev[0] entity_id=%s device_id=%s unique_id=%s mfr=%s model=%s area=%s",
                          dev0.get("entity_id"), dev0.get("device_id"), dev0.get("unique_id"),
                          dev0.get("manufacturer"), dev0.get("model"), dev0.get("area"))
-        # 所有上行消息都补 gatewayDeviceId + deviceId
+        # 所有上行消息都补 gatewayId + deviceId
         obj = ensure_device_ids(obj)
         payload = json.dumps(obj, ensure_ascii=False)
     except Exception as e:
@@ -621,7 +621,7 @@ def build_error_response(payload_obj, message):
         "traceId": payload_obj.get("traceId", ""),
         "cmd": payload_obj.get("cmd", ""),
         "type": "notify",
-        "gatewayDeviceId": HOME_MAC,
+        "gatewayId": HOME_MAC,
         "deviceId": payload_obj.get("deviceId") or HOME_MAC,
         "time": int(time.time()),
         "data": {
@@ -661,7 +661,7 @@ def build_processing_response(payload_obj):
         "traceId": payload_obj.get("traceId", ""),
         "cmd": payload_obj.get("cmd", ""),
         "type": "status",
-        "gatewayDeviceId": HOME_MAC,
+        "gatewayId": HOME_MAC,
         "deviceId": payload_obj.get("deviceId") or HOME_MAC,
         "time": int(time.time()),
         "data": data,
@@ -1079,7 +1079,7 @@ def heartbeat_loop():
                     "traceId": "hb_" + uuid.uuid4().hex[:12],
                     "cmd": "heartbeat",
                     "type": "notify",
-                    "gatewayDeviceId": HOME_MAC,
+                    "gatewayId": HOME_MAC,
                     "deviceId": HOME_MAC,       # 心跳是网关自身发的，两值相等
                     "time": int(time.time()),
                     "data": {

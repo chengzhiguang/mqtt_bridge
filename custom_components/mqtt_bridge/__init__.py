@@ -790,7 +790,7 @@ async def _async_handle_command(call: ServiceCall) -> ServiceResponse:
     if cmd == "service_call":
         cmd = SERVICE_CALL_SERVICE
     gateway_device_id = _get_gateway_device_id(call.hass) or str(
-        payload.get("gatewayDeviceId") or ""
+        payload.get("gatewayId") or ""
     ).strip()
 
     try:
@@ -1109,7 +1109,7 @@ def _build_command_envelope(
         "traceId": payload.get("traceId", ""),
         "cmd": payload.get("cmd", ""),
         "type": "notify",
-        "gatewayDeviceId": gateway_device_id,
+        "gatewayId": gateway_device_id,
         "deviceId": _infer_command_device_id(payload, data, gateway_device_id),
         "time": int(time.time()),
         "data": data,

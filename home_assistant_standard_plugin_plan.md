@@ -294,7 +294,7 @@ Add-on 负责：
   "traceId": "uuid",
   "cmd": "get_devices",
   "type": "command",
-  "gatewayDeviceId": "D69512C45225",
+  "gatewayId": "D69512C45225",
   "deviceId": "light.living_room",
   "time": 1760000000,
   "data": {}
@@ -308,7 +308,7 @@ Add-on 负责：
   "traceId": "uuid",
   "cmd": "get_devices",
   "type": "notify",
-  "gatewayDeviceId": "D69512C45225",
+  "gatewayId": "D69512C45225",
   "deviceId": "D69512C45225",
   "time": 1760000001,
   "data": {
