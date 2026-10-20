@@ -453,7 +453,10 @@ def on_aliyun_message(client, userdata, msg):
     local_client.publish(msg.topic, payload, qos=2)
 
 def on_aliyun_disconnect(client, userdata, rc):
-    log.warning("阿里云 MQTT 断开 rc=%s, 自动重连中...", rc)
+    if rc == 0:
+        log.info("阿里云 MQTT 已主动断开")
+    else:
+        log.warning("阿里云 MQTT 断开 rc=%s, 自动重连中...", rc)
     update_runtime_status(
         status="disconnected",
         aliyun_connected=False,
@@ -852,6 +855,17 @@ def setup_aliyun(cred):
         protocol=mqtt.MQTTv311,
     )
     client.username_pw_set(cred["username"], cred["password"])
+    client.will_set(
+        TOPIC_STATUS,
+        build_gateway_presence_payload(
+            "offline",
+            reason="unexpected_disconnect",
+            source="mqtt_lwt",
+            ha_alive=False,
+        ),
+        qos=1,
+        retain=False,
+    )
     if use_ssl:
         client.tls_set()  # 用系统 CA 证书
     client.on_connect = on_aliyun_connect
@@ -1066,6 +1080,48 @@ def check_ha_alive():
             log.debug("HA health check 失败: %s", e)
     return ha_alive
 
+
+def build_gateway_presence_payload(status, *, reason="", source="", ha_alive=False):
+    """Build a gateway presence payload for heartbeat and offline notices."""
+    return json.dumps(
+        {
+            "traceId": f"{status[:3]}_" + uuid.uuid4().hex[:12],
+            "cmd": "heartbeat",
+            "type": "notify",
+            "gatewayId": HOME_MAC,
+            "deviceId": HOME_MAC,
+            "time": int(time.time()),
+            "data": {
+                "status": status,
+                "ha_alive": ha_alive,
+                "reason": reason,
+                "source": source,
+            },
+        },
+        ensure_ascii=False,
+    )
+
+
+def publish_gateway_offline(client, *, reason, source):
+    """Publish an explicit offline notice before a graceful shutdown when possible."""
+    if client is None or not client.is_connected():
+        return False
+
+    payload = build_gateway_presence_payload(
+        "offline",
+        reason=reason,
+        source=source,
+        ha_alive=False,
+    )
+    try:
+        info = client.publish(TOPIC_STATUS, payload, qos=1)
+        info.wait_for_publish(timeout=3)
+        log.info("已发送离线通知: reason=%s source=%s", reason, source)
+        return True
+    except Exception as e:
+        log.warning("发送离线通知失败，将回退到 MQTT 遗言: %s", e)
+        return False
+
 def heartbeat_loop():
     """每 20s 往阿里云 MQTT 发一条心跳消息，顺便上报 HA 存活状态"""
     HEARTBEAT_TOPIC = f"iot/device/{HOME_MAC}/status"
@@ -1075,18 +1131,12 @@ def heartbeat_loop():
         if aliyun_client and aliyun_client.is_connected():
             try:
                 ha_alive = check_ha_alive()
-                payload = json.dumps({
-                    "traceId": "hb_" + uuid.uuid4().hex[:12],
-                    "cmd": "heartbeat",
-                    "type": "notify",
-                    "gatewayId": HOME_MAC,
-                    "deviceId": HOME_MAC,       # 心跳是网关自身发的，两值相等
-                    "time": int(time.time()),
-                    "data": {
-                        "status": "alive",
-                        "ha_alive": ha_alive,
-                    }
-                })
+                payload = build_gateway_presence_payload(
+                    "alive",
+                    reason="heartbeat",
+                    source="runtime",
+                    ha_alive=ha_alive,
+                )
                 aliyun_client.publish(HEARTBEAT_TOPIC, payload, qos=0)
                 log.info("心跳已发送 ha_alive=%s", ha_alive)
                 update_runtime_status(
@@ -1106,9 +1156,15 @@ def signal_handler(sig, frame):
     log.info("收到停止信号，正在优雅退出...")
     running = False
     update_runtime_status(status="stopped")
+    offline_sent = publish_gateway_offline(
+        aliyun_client,
+        reason=f"signal_{sig}",
+        source="graceful_shutdown",
+    )
     if aliyun_client:
         aliyun_client.loop_stop()
-        aliyun_client.disconnect()
+        if offline_sent:
+            aliyun_client.disconnect()
     if local_client:
         local_client.loop_stop()
         local_client.disconnect()

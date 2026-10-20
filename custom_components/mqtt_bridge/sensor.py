@@ -8,11 +8,13 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import CONF_GATEWAY_DEVICE_ID, DOMAIN
 from .runtime import RUNTIME_LOG_PATH, RUNTIME_STATUS_PATH, read_runtime_logs, read_runtime_status
@@ -26,7 +28,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up MQTT Bridge runtime sensors."""
-    coordinator = MqttBridgeRuntimeCoordinator(hass)
+    coordinator = MqttBridgeRuntimeCoordinator(hass, entry.entry_id)
     await coordinator.async_config_entry_first_refresh()
     async_add_entities(
         [
@@ -41,6 +43,8 @@ async def async_setup_entry(
             MqttBridgeRecentLogsSensor(entry, coordinator),
             MqttBridgePublicMqttInfoSensor(entry, coordinator),
             MqttBridgeLocalMqttInfoSensor(entry, coordinator),
+            MqttBridgeConnectedDevicesSensor(entry, coordinator),
+            MqttBridgeLastDeviceActivitySensor(entry, coordinator),
         ]
     )
 
@@ -48,18 +52,20 @@ async def async_setup_entry(
 class MqttBridgeRuntimeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Poll bridge runtime status and recent logs."""
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, bridge_entry_id: str) -> None:
         super().__init__(
             hass,
             logger=_LOGGER,
             name="mqtt_bridge_runtime",
             update_interval=timedelta(seconds=5),
         )
+        self._bridge_entry_id = bridge_entry_id
 
     async def _async_update_data(self) -> dict[str, Any]:
         status = await self.hass.async_add_executor_job(read_runtime_status)
         logs = await self.hass.async_add_executor_job(read_runtime_logs, 20)
-        return {"status": status, "logs": logs}
+        devices = _build_device_overview(self.hass, self._bridge_entry_id)
+        return {"status": status, "logs": logs, "devices": devices}
 
 
 class MqttBridgeBaseEntity(CoordinatorEntity[MqttBridgeRuntimeCoordinator], SensorEntity):
@@ -259,3 +265,178 @@ class MqttBridgeLocalMqttInfoSensor(MqttBridgeBaseEntity):
             "topic_notify": status.get("local_mqtt_topic_notify", ""),
             "topic_status": status.get("local_mqtt_topic_status", ""),
         }
+
+
+class MqttBridgeConnectedDevicesSensor(MqttBridgeBaseEntity):
+    """Expose a summary of bridged Home Assistant devices."""
+
+    def __init__(self, entry: ConfigEntry, coordinator: MqttBridgeRuntimeCoordinator) -> None:
+        super().__init__(
+            entry,
+            coordinator,
+            key="connected_devices",
+            name="设备在线概览",
+            icon="mdi:devices",
+        )
+
+    @property
+    def native_value(self) -> str:
+        overview = self.coordinator.data.get("devices", {})
+        total = int(overview.get("total_devices", 0) or 0)
+        online = int(overview.get("online_devices", 0) or 0)
+        return f"{online}/{total} 在线" if total else "暂无设备"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        overview = self.coordinator.data.get("devices", {})
+        return {
+            "total_devices": overview.get("total_devices", 0),
+            "online_devices": overview.get("online_devices", 0),
+            "offline_devices": overview.get("offline_devices", 0),
+            "last_device_activity_at": overview.get("latest_activity_at"),
+            "last_device_activity_name": overview.get("latest_activity_name", ""),
+            "devices": overview.get("devices", []),
+        }
+
+
+class MqttBridgeLastDeviceActivitySensor(MqttBridgeBaseEntity):
+    """Expose the latest observed HA device activity summary."""
+
+    def __init__(self, entry: ConfigEntry, coordinator: MqttBridgeRuntimeCoordinator) -> None:
+        super().__init__(
+            entry,
+            coordinator,
+            key="last_device_activity",
+            name="最后设备活动",
+            icon="mdi:timeline-clock-outline",
+        )
+
+    @property
+    def native_value(self) -> str:
+        overview = self.coordinator.data.get("devices", {})
+        latest_name = str(overview.get("latest_activity_name") or "").strip()
+        latest_at = str(overview.get("latest_activity_at") or "").strip()
+        if not latest_name and not latest_at:
+            return "暂无"
+        if latest_name and latest_at:
+            return f"{latest_name} {latest_at}"
+        return latest_name or latest_at
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        overview = self.coordinator.data.get("devices", {})
+        return {
+            "device_id": overview.get("latest_activity_device_id", ""),
+            "device_name": overview.get("latest_activity_name", ""),
+            "entity_id": overview.get("latest_activity_entity_id", ""),
+            "last_state_update_at": overview.get("latest_activity_at"),
+            "devices": overview.get("devices", []),
+        }
+
+
+def _build_device_overview(hass: HomeAssistant, bridge_entry_id: str) -> dict[str, Any]:
+    """Build a device-level online/activity snapshot for the integration page."""
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+    devices: dict[str, dict[str, Any]] = {}
+    latest_activity_ts = None
+    latest_activity: dict[str, Any] | None = None
+
+    for entity_entry in entity_registry.entities.values():
+        if getattr(entity_entry, "config_entry_id", None) == bridge_entry_id:
+            continue
+        if entity_entry.disabled_by is not None:
+            continue
+        if not entity_entry.device_id:
+            continue
+
+        state = hass.states.get(entity_entry.entity_id)
+        if state is None:
+            continue
+
+        device_entry = device_registry.async_get(entity_entry.device_id)
+        device_name = ""
+        manufacturer = ""
+        model = ""
+        area_id = ""
+        if device_entry is not None:
+            device_name = (
+                device_entry.name_by_user
+                or device_entry.name
+                or device_entry.serial_number
+                or entity_entry.device_id
+            )
+            manufacturer = device_entry.manufacturer or ""
+            model = device_entry.model or ""
+            area_id = device_entry.area_id or ""
+        else:
+            device_name = entity_entry.original_name or entity_entry.entity_id
+
+        item = devices.setdefault(
+            entity_entry.device_id,
+            {
+                "device_id": entity_entry.device_id,
+                "name": device_name,
+                "manufacturer": manufacturer,
+                "model": model,
+                "area_id": area_id,
+                "entity_count": 0,
+                "online_entity_count": 0,
+                "online": False,
+                "last_state_update_at": "",
+                "last_state_entity_id": "",
+                "entities": [],
+                "_last_state_dt": None,
+            },
+        )
+        item["entity_count"] += 1
+        item["entities"].append(entity_entry.entity_id)
+
+        is_online = state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+        if is_online:
+            item["online_entity_count"] += 1
+            item["online"] = True
+
+        last_updated = getattr(state, "last_updated", None) or getattr(state, "last_changed", None)
+        if last_updated is not None:
+            local_time = dt_util.as_local(last_updated)
+            local_value = local_time.strftime("%Y-%m-%d %H:%M:%S")
+            if item["_last_state_dt"] is None or local_time > item["_last_state_dt"]:
+                item["_last_state_dt"] = local_time
+                item["last_state_update_at"] = local_value
+                item["last_state_entity_id"] = entity_entry.entity_id
+
+            if latest_activity_ts is None or local_time > latest_activity_ts:
+                latest_activity_ts = local_time
+                latest_activity = {
+                    "latest_activity_at": local_value,
+                    "latest_activity_name": item["name"],
+                    "latest_activity_device_id": item["device_id"],
+                    "latest_activity_entity_id": entity_entry.entity_id,
+                }
+
+    device_list = sorted(
+        devices.values(),
+        key=lambda item: (
+            not bool(item.get("online")),
+            str(item.get("name") or item.get("device_id") or ""),
+        ),
+    )
+    for item in device_list:
+        item.pop("_last_state_dt", None)
+    total = len(device_list)
+    online = sum(1 for item in device_list if item.get("online"))
+    offline = total - online
+    latest_activity = latest_activity or {
+        "latest_activity_at": "",
+        "latest_activity_name": "",
+        "latest_activity_device_id": "",
+        "latest_activity_entity_id": "",
+    }
+    return {
+        "total_devices": total,
+        "online_devices": online,
+        "offline_devices": offline,
+        "devices": device_list,
+        **latest_activity,
+    }
