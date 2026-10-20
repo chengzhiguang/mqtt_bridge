@@ -141,7 +141,7 @@ handle_command:
   fields:
     payload:
       name: 命令负载
-      description: 完整命令对象，包含 cmdId、cmd、type、deviceId、gatewayDeviceId、data 等字段。
+      description: 完整命令对象，包含 traceId、cmd、type、deviceId、gatewayDeviceId、data 等字段。
       selector:
         object:
 
@@ -171,7 +171,7 @@ get_runtime_logs:
           mode: box
     contains:
       name: 关键词过滤
-      description: 可选，只返回包含该关键词的日志行，例如某个 cmdId。
+      description: 可选，只返回包含该关键词的日志行，例如某个 traceId。
       example: 550e8400-e29b-41d4-a716-446655440000
       selector:
         text:

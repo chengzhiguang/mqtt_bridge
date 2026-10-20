@@ -217,7 +217,7 @@ runtime_status = {
     "last_error_at": 0,
     "last_exception": "",
     "last_message_at": 0,
-    "last_message_cmd_id": "",
+    "last_message_trace_id": "",
     "last_message_cmd": "",
     "last_response_topic": "",
     "last_response_status": "",
@@ -417,15 +417,15 @@ def on_aliyun_message(client, userdata, msg):
         obj = ensure_device_ids(obj)
         payload = json.dumps(obj, ensure_ascii=False)
         log.info(
-            "收到下行消息: topic=%s cmdId=%s cmd=%s deviceId=%s",
+            "收到下行消息: topic=%s traceId=%s cmd=%s deviceId=%s",
             msg.topic,
-            obj.get("cmdId", ""),
+            obj.get("traceId", ""),
             obj.get("cmd", ""),
             obj.get("deviceId", ""),
         )
         update_runtime_status(
             last_message_at=int(time.time()),
-            last_message_cmd_id=obj.get("cmdId", ""),
+            last_message_trace_id=obj.get("traceId", ""),
             last_message_cmd=obj.get("cmd", ""),
         )
     except Exception:
@@ -536,14 +536,14 @@ def dispatch_command_via_ha_service(payload_obj):
     url = f"{HA_BASE_URL}/api/services/{service_domain}/{service_name}?return_response"
     request_body = json.dumps({"payload": payload_obj}, ensure_ascii=False).encode()
     log.info(
-        "开始调用 HA service: cmdId=%s service=%s payload=%s",
-        payload_obj.get("cmdId", ""),
+        "开始调用 HA service: traceId=%s service=%s payload=%s",
+        payload_obj.get("traceId", ""),
         HA_COMMAND_SERVICE,
         json.dumps(payload_obj, ensure_ascii=False)[:400],
     )
     update_runtime_status(
         last_message_at=int(time.time()),
-        last_message_cmd_id=payload_obj.get("cmdId", ""),
+        last_message_trace_id=payload_obj.get("traceId", ""),
         last_message_cmd=payload_obj.get("cmd", ""),
     )
     headers = {
@@ -583,8 +583,8 @@ def dispatch_command_via_ha_service(payload_obj):
     if not isinstance(response_data, dict):
         return build_error_response(payload_obj, "HA service 返回结构异常")
     log.info(
-        "HA service 调用完成: cmdId=%s result=%s",
-        payload_obj.get("cmdId", ""),
+        "HA service 调用完成: traceId=%s result=%s",
+        payload_obj.get("traceId", ""),
         json.dumps(response_data, ensure_ascii=False)[:400],
     )
     response_status = ""
@@ -618,7 +618,7 @@ def extract_service_response(parsed):
 def build_error_response(payload_obj, message):
     """构造统一错误响应。"""
     return {
-        "cmdId": payload_obj.get("cmdId", ""),
+        "traceId": payload_obj.get("traceId", ""),
         "cmd": payload_obj.get("cmd", ""),
         "type": "notify",
         "gatewayDeviceId": HOME_MAC,
@@ -658,7 +658,7 @@ def build_processing_response(payload_obj):
                 data[key] = value.strip()
 
     return {
-        "cmdId": payload_obj.get("cmdId", ""),
+        "traceId": payload_obj.get("traceId", ""),
         "cmd": payload_obj.get("cmd", ""),
         "type": "status",
         "gatewayDeviceId": HOME_MAC,
@@ -1076,7 +1076,7 @@ def heartbeat_loop():
             try:
                 ha_alive = check_ha_alive()
                 payload = json.dumps({
-                    "cmdId": "hb_" + uuid.uuid4().hex[:12],
+                    "traceId": "hb_" + uuid.uuid4().hex[:12],
                     "cmd": "heartbeat",
                     "type": "notify",
                     "gatewayDeviceId": HOME_MAC,

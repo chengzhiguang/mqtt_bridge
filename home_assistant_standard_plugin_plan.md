@@ -291,7 +291,7 @@ Add-on 负责：
 
 ```json
 {
-  "cmdId": "uuid",
+  "traceId": "uuid",
   "cmd": "get_devices",
   "type": "command",
   "gatewayDeviceId": "D69512C45225",
@@ -305,7 +305,7 @@ Add-on 负责：
 
 ```json
 {
-  "cmdId": "uuid",
+  "traceId": "uuid",
   "cmd": "get_devices",
   "type": "notify",
   "gatewayDeviceId": "D69512C45225",

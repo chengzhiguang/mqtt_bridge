@@ -1106,7 +1106,7 @@ def _build_command_envelope(
 ) -> dict[str, Any]:
     """Wrap a service result in the legacy MQTT command response format."""
     return {
-        "cmdId": payload.get("cmdId", ""),
+        "traceId": payload.get("traceId", ""),
         "cmd": payload.get("cmd", ""),
         "type": "notify",
         "gatewayDeviceId": gateway_device_id,

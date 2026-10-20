@@ -223,7 +223,7 @@ def remove_from_registry(scene_id):
             pass
 
 
-def cmd_list(cmd_id=""):
+def cmd_list(trace_id=""):
     """列出所有场景（启用 + 停用）"""
     load_mqtt_config()
     scenes = load_yaml(SCENES_FILE)
@@ -245,7 +245,7 @@ def cmd_list(cmd_id=""):
 
     import time
     result = {
-        "cmdId": cmd_id,
+        "traceId": trace_id,
         "cmd": "list_scenes",
         "type": "notify",
         "time": int(time.time()),
@@ -413,8 +413,8 @@ def main():
     command = sys.argv[1]
 
     if command == "list":
-        cmd_id = sys.argv[2] if len(sys.argv) > 2 else ""
-        cmd_list(cmd_id)
+        trace_id = sys.argv[2] if len(sys.argv) > 2 else ""
+        cmd_list(trace_id)
     elif command == "create":
         scene_json = parse_json_arg(sys.argv, 2)
         cmd_create(scene_json)
