@@ -49,6 +49,7 @@ from .const import (
 from .runtime import (
     RUNTIME_CONTROL_DIR,
     RUNTIME_LOG_PATH,
+    ensure_runtime_started,
     initialize_runtime_environment,
 )
 from .scene import MqttBridgeSceneManager, get_scene_manager
@@ -203,6 +204,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: BridgeConfigEntry) -> bo
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _async_register_services(hass)
+    startup_result = await asyncio.to_thread(ensure_runtime_started, entry_config)
+    missing_fields = startup_result.get("missing_fields", [])
+    if missing_fields:
+        _LOGGER.warning(
+            "MQTT Bridge 运行时未自动启动，仍缺少配置: %s",
+            ", ".join(str(item) for item in missing_fields),
+        )
+    else:
+        start_result = startup_result.get("start_result", {})
+        returncode = (
+            start_result.get("returncode")
+            if isinstance(start_result, dict)
+            else None
+        )
+        if startup_result.get("process_running"):
+            if startup_result.get("started"):
+                _LOGGER.info("MQTT Bridge 运行时已在启动阶段自动拉起")
+            else:
+                _LOGGER.info("MQTT Bridge 运行时已在运行中，跳过重复启动")
+        elif returncode not in (None, 0):
+            _LOGGER.error(
+                "MQTT Bridge 运行时自动启动失败: stdout=%s stderr=%s",
+                start_result.get("stdout", ""),
+                start_result.get("stderr", ""),
+            )
 
     return True
 

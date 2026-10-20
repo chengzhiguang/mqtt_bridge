@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import stat
 import subprocess
@@ -210,19 +211,88 @@ def initialize_runtime_environment(
     return result
 
 
+def _read_runtime_pid() -> int | None:
+    """Read the runtime pid file when present."""
+    if not RUNTIME_PID_PATH.exists():
+        return None
+
+    try:
+        raw_value = RUNTIME_PID_PATH.read_text(encoding="utf-8", errors="replace").strip()
+        if not raw_value:
+            return None
+        return int(raw_value)
+    except Exception:
+        return None
+
+
+def is_runtime_process_running() -> bool:
+    """Return whether the bridge runtime process is currently alive."""
+    pid = _read_runtime_pid()
+    if not pid:
+        return False
+
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def ensure_runtime_started(config: dict[str, Any]) -> dict[str, Any]:
+    """Initialize runtime files and start the bridge when it is not running."""
+    result = initialize_runtime_environment(config, start_immediately=False)
+    missing_fields = result.get("missing_fields", [])
+    process_running = is_runtime_process_running()
+    result["process_running"] = process_running
+    result["started"] = False
+
+    if missing_fields or process_running:
+        return result
+
+    completed = subprocess.run(
+        ["sh", str(RUNTIME_RESTART_SCRIPT_PATH)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    result["start_result"] = {
+        "returncode": completed.returncode,
+        "stdout": completed.stdout.strip(),
+        "stderr": completed.stderr.strip(),
+    }
+    result["started"] = completed.returncode == 0
+    result["process_running"] = is_runtime_process_running()
+    return result
+
+
 def read_runtime_status() -> dict[str, Any]:
     """Read the persisted bridge runtime status file."""
+    process_running = is_runtime_process_running()
+    pid = _read_runtime_pid()
     if not RUNTIME_STATUS_PATH.exists():
-        return {}
+        return {
+            "process_running": process_running,
+            "pid": pid,
+        }
 
     try:
         payload = json.loads(
             RUNTIME_STATUS_PATH.read_text(encoding="utf-8", errors="replace")
         )
     except Exception:
-        return {}
+        return {
+            "process_running": process_running,
+            "pid": pid,
+        }
 
-    return payload if isinstance(payload, dict) else {}
+    status = payload if isinstance(payload, dict) else {}
+    status["process_running"] = process_running
+    status["pid"] = pid
+    if not process_running and status.get("status") == "connected":
+        status["status"] = "stopped"
+        status.setdefault("last_error", "bridge.py 未运行，当前为历史状态文件")
+    return status
 
 
 def read_runtime_logs(lines: int = 20) -> list[str]:
